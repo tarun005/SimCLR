@@ -5,6 +5,8 @@ from torchvision import models
 from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset
 from models.resnet_simclr import ResNetSimCLR
 from simclr import SimCLR
+from ddp import misc
+from torch.cuda.amp import GradScaler
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
@@ -15,7 +17,7 @@ parser.add_argument('-data', metavar='DIR', default='./datasets',
                     help='path to dataset')
 parser.add_argument('-dataset-name', default='stl10',
                     help='dataset name', choices=['stl10', 'cifar10'])
-parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
+parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
                     choices=model_names,
                     help='model architecture: ' +
                          ' | '.join(model_names) +
@@ -41,6 +43,10 @@ parser.add_argument('--disable-cuda', action='store_true',
 parser.add_argument('--fp16-precision', action='store_true',
                     help='Whether or not to use 16-bit precision GPU training.')
 
+parser.add_argument('--resume', type=str, help="Resume checkpoint path")
+parser.add_argument('--output_dir', default='./output_dir',
+                        help='path where to save, empty for no saving')
+
 parser.add_argument('--out_dim', default=128, type=int,
                     help='feature dimension (default: 128)')
 parser.add_argument('--log-every-n-steps', default=100, type=int,
@@ -51,38 +57,77 @@ parser.add_argument('--n-views', default=2, type=int, metavar='N',
                     help='Number of views for contrastive learning training.')
 parser.add_argument('--gpu-index', default=0, type=int, help='Gpu index.')
 
+## Distributed Data Parallel
+parser.add_argument('--world_size', default=1, type=int,
+                        help='number of distributed processes')
+parser.add_argument('--local_rank', default=-1, type=int)
+parser.add_argument('--dist_on_itp', action='store_true')
+parser.add_argument('--dist_url', default='env://',
+                    help='url used to set up distributed training')
+
 
 def main():
+
     args = parser.parse_args()
     assert args.n_views == 2, "Only two view training is supported. Please use --n-views 2."
+
+    ## set up distributed training
+    misc.init_distributed_mode(args)
+
     # check if gpu training is available
     if not args.disable_cuda and torch.cuda.is_available():
         args.device = torch.device('cuda')
+        device = args.device
         cudnn.deterministic = True
         cudnn.benchmark = True
     else:
         args.device = torch.device('cpu')
+        device = args.device
         args.gpu_index = -1
 
     dataset = ContrastiveLearningDataset(args.data)
 
     train_dataset = dataset.get_dataset(args.dataset_name, args.n_views)
 
+    if True:  # args.distributed:
+        num_tasks = misc.get_world_size()
+        global_rank = misc.get_rank()
+        sampler_train = torch.utils.data.DistributedSampler(
+            train_dataset, num_replicas=num_tasks, rank=global_rank, shuffle=True
+        )
+        print("Sampler_train = %s" % str(sampler_train))
+    else:
+        sampler_train = torch.utils.data.RandomSampler(train_dataset)
+
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=True, drop_last=True)
+        train_dataset, sampler=sampler_train, batch_size=args.batch_size, shuffle=True,
+        num_workers=args.workers, pin_memory=True, drop_last=True, collate_fn=misc.collate_fn)
 
     model = ResNetSimCLR(base_model=args.arch, out_dim=args.out_dim)
+
+    model.to(device)
+    model_without_ddp = model
+
+    print("Model = %s" % str(model_without_ddp))
+
+    if args.distributed:
+        # model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+        model_without_ddp = model.module
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader), eta_min=0,
                                                            last_epoch=-1)
 
+    scaler = GradScaler(enabled=args.fp16_precision)
+
+    misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=scaler)                                                           
+
     #  It’s a no-op if the 'gpu_index' argument is a negative integer or None.
-    with torch.cuda.device(args.gpu_index):
-        simclr = SimCLR(model=model, optimizer=optimizer, scheduler=scheduler, args=args)
-        simclr.train(train_loader)
+    # with torch.cuda.device(args.gpu_index):
+    simclr = SimCLR(model=model, optimizer=optimizer, scheduler=scheduler, args=args, scaler=scaler)
+    simclr.train(train_loader)
 
 
 if __name__ == "__main__":
