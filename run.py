@@ -50,6 +50,7 @@ parser.add_argument('--warmup_epochs', type=int, default=10, metavar='N',
                         help='epochs to warmup LR')
 parser.add_argument('--accum_iter', default=1, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
+parser.add_argument('--subset_size', default=1e6, type=int, help="size of the dataset")
 
 parser.add_argument('--out_dim', default=128, type=int,
                     help='feature dimension (default: 128)')
@@ -92,6 +93,7 @@ def main():
     dataset = ContrastiveLearningDataset(args.data)
 
     train_dataset = dataset.get_dataset(args.dataset_name, args.n_views)
+    train_dataset = torch.utils.data.Subset(train_dataset, misc.select_indices(train_dataset, args.subset_size))
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()

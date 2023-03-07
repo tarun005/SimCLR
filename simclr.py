@@ -8,8 +8,8 @@ import math
 import torch
 import torch.nn.functional as F
 from torch.cuda.amp import GradScaler, autocast
-from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
+# from torch.utils.tensorboard import SummaryWriter
+# from tqdm import tqdm
 from utils import save_config_file, accuracy, save_checkpoint
 from ddp.misc import SmoothedValue, all_reduce_mean, save_model, MetricLogger
 
@@ -85,15 +85,13 @@ class SimCLR(object):
             if self.args.distributed:
                 train_loader.sampler.set_epoch(epoch_counter)
             for data_iter_step, (images, _) in enumerate(metric_logger.log_every(train_loader, print_freq, header)):
-                # images = torch.cat(images, dim=0)
+                images = torch.cat(images, dim=0)
 
-                # images = images.to(self.args.device)
-                images = [i.to(self.args.device) for i in images]
+                images = images.to(self.args.device)
 
                 with autocast(enabled=self.args.fp16_precision):
-                    features_i, features_j = [self.model(img) for img in images]
-                    # features = self.model(images)
-                    # features_i, features_j = torch.split(features, [len(features)//2]*2, dim=0)
+                    features = self.model(images)
+                    features_i, features_j = torch.split(features, [len(features)//2]*2, dim=0)
                     loss = self.nt_xent(features_i, features_j)
                     # logits, labels = self.info_nce_loss(features)
                     # loss = self.criterion(logits, labels)
