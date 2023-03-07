@@ -63,9 +63,10 @@ class SimCLR(object):
     def train(self, train_loader):
         
         scaler = self.scaler
+        accum_iter = self.args.accum_iter
 
         # save config file
-        save_config_file(self.writer.log_dir, self.args)
+        save_config_file(self.args.output_dir, self.args)
 
         n_iter = 0
         logging.info(f"Start SimCLR training for {self.args.epochs} epochs.")
@@ -89,6 +90,8 @@ class SimCLR(object):
                     features = self.model(images)
                     logits, labels = self.info_nce_loss(features)
                     loss = self.criterion(logits, labels)
+                
+                loss /= accum_iter
 
                 loss_value = loss.item()
 
@@ -96,12 +99,14 @@ class SimCLR(object):
                     print("Loss is {}, stopped training".format(loss_value))
                     sys.exit(1)
 
-                self.optimizer.zero_grad()
+                if (data_iter_step + 1) % accum_iter == 0:
+                    self.optimizer.zero_grad()
 
                 scaler.scale(loss).backward()
 
-                scaler.step(self.optimizer)
-                scaler.update()
+                if (data_iter_step + 1) % accum_iter == 0:
+                    scaler.step(self.optimizer)
+                    scaler.update()
 
                 torch.cuda.synchronize()
 
@@ -121,7 +126,7 @@ class SimCLR(object):
                 n_iter += 1
 
             # warmup for the first 10 epochs
-            if epoch_counter >= 10:
+            if epoch_counter >= self.args.warmup_epochs:
                 self.scheduler.step()
 
             # gather the stats from all processes

@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description='PyTorch SimCLR')
 parser.add_argument('-data', metavar='DIR', default='./datasets',
                     help='path to dataset')
 parser.add_argument('-dataset-name', default='stl10',
-                    help='dataset name', choices=['stl10', 'cifar10'])
+                    help='dataset name', choices=['stl10', 'cifar10', 'imagenet'])
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
                     choices=model_names,
                     help='model architecture: ' +
@@ -31,7 +31,7 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     help='mini-batch size (default: 256), this is the total '
                          'batch size of all GPUs on the current node when '
                          'using Data Parallel or Distributed Data Parallel')
-parser.add_argument('--lr', '--learning-rate', default=0.0003, type=float,
+parser.add_argument('--blr', '--base-learning-rate', default=0.0003, type=float,
                     metavar='LR', help='initial learning rate', dest='lr')
 parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)',
@@ -46,6 +46,10 @@ parser.add_argument('--fp16-precision', action='store_true',
 parser.add_argument('--resume', type=str, help="Resume checkpoint path")
 parser.add_argument('--output_dir', default='./output_dir',
                         help='path where to save, empty for no saving')
+parser.add_argument('--warmup_epochs', type=int, default=10, metavar='N',
+                        help='epochs to warmup LR')
+parser.add_argument('--accum_iter', default=1, type=int,
+                        help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
 parser.add_argument('--out_dim', default=128, type=int,
                     help='feature dimension (default: 128)')
@@ -100,7 +104,7 @@ def main():
         sampler_train = torch.utils.data.RandomSampler(train_dataset)
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, sampler=sampler_train, batch_size=args.batch_size, shuffle=True,
+        train_dataset, sampler=sampler_train, batch_size=args.batch_size,
         num_workers=args.workers, pin_memory=True, drop_last=True, collate_fn=misc.collate_fn)
 
     model = ResNetSimCLR(base_model=args.arch, out_dim=args.out_dim)
@@ -115,7 +119,20 @@ def main():
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
         model_without_ddp = model.module
 
+    eff_batch_size = args.batch_size * args.accum_iter * misc.get_world_size()
+    
+    if args.lr is None:  # only base_lr is specified
+        args.lr = args.blr * eff_batch_size / 256
+
+    print("base lr: %.2e" % (args.lr * 256 / eff_batch_size))
+    print("actual lr: %.2e" % args.lr)
+
+    print("accumulate grad iterations: %d" % args.accum_iter)
+    print("effective batch size: %d" % eff_batch_size)
+
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
+
+    print("Optimizer = %s"% str(optimizer))
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader), eta_min=0,
                                                            last_epoch=-1)
