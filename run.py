@@ -134,7 +134,7 @@ def main():
 
     print("Optimizer = %s"% str(optimizer))
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader), eta_min=0,
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=0,
                                                            last_epoch=-1)
 
     scaler = GradScaler(enabled=args.fp16_precision)

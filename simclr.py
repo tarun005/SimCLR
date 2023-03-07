@@ -1,4 +1,5 @@
 import logging
+from nt_xent import NT_Xent
 import os
 from pickletools import optimize
 import sys
@@ -29,36 +30,38 @@ class SimCLR(object):
         self.criterion = torch.nn.CrossEntropyLoss().to(self.args.device)
         self.scaler = kwargs['scaler']
 
-    def info_nce_loss(self, features):
+        self.nt_xent = NT_Xent(self.args.batch_size, self.args.temperature, self.args.world_size)
 
-        labels = torch.cat([torch.arange(self.args.batch_size) for i in range(self.args.n_views)], dim=0)
-        labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
-        labels = labels.to(self.args.device)
+    # def info_nce_loss(self, features):
 
-        features = F.normalize(features, dim=1)
+    #     labels = torch.cat([torch.arange(self.args.batch_size) for i in range(self.args.n_views)], dim=0)
+    #     labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
+    #     labels = labels.to(self.args.device)
 
-        similarity_matrix = torch.matmul(features, features.T)
-        # assert similarity_matrix.shape == (
-        #     self.args.n_views * self.args.batch_size, self.args.n_views * self.args.batch_size)
-        # assert similarity_matrix.shape == labels.shape
+    #     features = F.normalize(features, dim=1)
 
-        # discard the main diagonal from both: labels and similarities matrix
-        mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.args.device)
-        labels = labels[~mask].view(labels.shape[0], -1)
-        similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
-        # assert similarity_matrix.shape == labels.shape
+    #     similarity_matrix = torch.matmul(features, features.T)
+    #     # assert similarity_matrix.shape == (
+    #     #     self.args.n_views * self.args.batch_size, self.args.n_views * self.args.batch_size)
+    #     # assert similarity_matrix.shape == labels.shape
 
-        # select and combine multiple positives
-        positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)
+    #     # discard the main diagonal from both: labels and similarities matrix
+    #     mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.args.device)
+    #     labels = labels[~mask].view(labels.shape[0], -1)
+    #     similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
+    #     # assert similarity_matrix.shape == labels.shape
 
-        # select only the negatives the negatives
-        negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
+    #     # select and combine multiple positives
+    #     positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)
 
-        logits = torch.cat([positives, negatives], dim=1)
-        labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.args.device)
+    #     # select only the negatives the negatives
+    #     negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
 
-        logits = logits / self.args.temperature
-        return logits, labels
+    #     logits = torch.cat([positives, negatives], dim=1)
+    #     labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.args.device)
+
+    #     logits = logits / self.args.temperature
+    #     return logits, labels
 
     def train(self, train_loader):
         
@@ -82,14 +85,18 @@ class SimCLR(object):
             if self.args.distributed:
                 train_loader.sampler.set_epoch(epoch_counter)
             for data_iter_step, (images, _) in enumerate(metric_logger.log_every(train_loader, print_freq, header)):
-                images = torch.cat(images, dim=0)
+                # images = torch.cat(images, dim=0)
 
-                images = images.to(self.args.device)
+                # images = images.to(self.args.device)
+                images = [i.to(self.args.device) for i in images]
 
                 with autocast(enabled=self.args.fp16_precision):
-                    features = self.model(images)
-                    logits, labels = self.info_nce_loss(features)
-                    loss = self.criterion(logits, labels)
+                    features_i, features_j = [self.model(img) for img in images]
+                    # features = self.model(images)
+                    # features_i, features_j = torch.split(features, [len(features)//2]*2, dim=0)
+                    loss = self.nt_xent(features_i, features_j)
+                    # logits, labels = self.info_nce_loss(features)
+                    # loss = self.criterion(logits, labels)
                 
                 loss /= accum_iter
 
