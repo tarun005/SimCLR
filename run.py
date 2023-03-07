@@ -32,7 +32,7 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                          'batch size of all GPUs on the current node when '
                          'using Data Parallel or Distributed Data Parallel')
 parser.add_argument('--blr', '--base-learning-rate', default=0.0003, type=float,
-                    metavar='LR', help='initial learning rate', dest='lr')
+                    metavar='LR', help='initial learning rate', dest='blr')
 parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)',
                     dest='weight_decay')
@@ -123,8 +123,7 @@ def main():
 
     eff_batch_size = args.batch_size * args.accum_iter * misc.get_world_size()
     
-    if args.lr is None:  # only base_lr is specified
-        args.lr = args.blr * eff_batch_size / 256
+    args.lr = args.blr * eff_batch_size / 256
 
     print("base lr: %.2e" % (args.lr * 256 / eff_batch_size))
     print("actual lr: %.2e" % args.lr)
