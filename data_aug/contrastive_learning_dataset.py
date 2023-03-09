@@ -4,7 +4,7 @@ from data_aug.gaussian_blur import GaussianBlur
 from torchvision import transforms, datasets
 from data_aug.view_generator import ContrastiveLearningViewGenerator
 from exceptions.exceptions import InvalidDatasetSelection
-# from torchvision.datasets import ImageFolder
+from torchvision.datasets import ImageFolder
 import torchvision
 
 
@@ -37,7 +37,7 @@ class ContrastiveLearningDataset:
                                                               n_views),
                                                           download=True),
 
-                          'imagenet': lambda: ImageFolderEx(self.root_folder, 
+                          'imagenet': lambda: ImageFolder(self.root_folder, 
                                                           transform=ContrastiveLearningViewGenerator(
                                                               self.get_simclr_pipeline_transform(224),
                                                               n_views
@@ -51,26 +51,26 @@ class ContrastiveLearningDataset:
         else:
             return dataset_fn()
 
-class ImageFolderEx(torchvision.datasets.ImageFolder):
+# class ImageFolderEx(torchvision.datasets.ImageFolder):
 
-    def __getitem__(self, index: int) -> Tuple[Any, Any]:
-        """
-        Args:
-            index (int): Index
+#     def __getitem__(self, index: int) -> Tuple[Any, Any]:
+#         """
+#         Args:
+#             index (int): Index
 
-        Returns:
-            tuple: (sample, target) where target is class_index of the target class.
-        """
-        path, target = self.samples[index]
+#         Returns:
+#             tuple: (sample, target) where target is class_index of the target class.
+#         """
+#         path, target = self.samples[index]
 
-        try:
-            sample = self.loader(path)
-        except:
-            return None, None
+#         try:
+#             sample = self.loader(path)
+#         except:
+#             return None, None
 
-        if self.transform is not None:
-            sample = self.transform(sample)
-        if self.target_transform is not None:
-            target = self.target_transform(target)
+#         if self.transform is not None:
+#             sample = self.transform(sample)
+#         if self.target_transform is not None:
+#             target = self.target_transform(target)
 
-        return sample, target
+#         return sample, target

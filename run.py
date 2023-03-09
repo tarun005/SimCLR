@@ -107,7 +107,7 @@ def main():
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, sampler=sampler_train, batch_size=args.batch_size,
-        num_workers=args.workers, pin_memory=True, drop_last=True, collate_fn=misc.collate_fn)
+        num_workers=args.workers, pin_memory=True, drop_last=True)
 
     model = ResNetSimCLR(base_model=args.arch, out_dim=args.out_dim)
 
