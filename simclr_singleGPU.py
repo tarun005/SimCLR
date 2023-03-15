@@ -7,7 +7,7 @@ import math
 import torch
 import torch.nn.functional as F
 from torch.cuda.amp import GradScaler, autocast
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from utils import save_config_file, accuracy, save_checkpoint
 from ddp.misc import SmoothedValue, all_reduce_mean, save_model, MetricLogger
