@@ -4,7 +4,8 @@ import torch.backends.cudnn as cudnn
 from torchvision import models
 from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset
 from models.resnet_simclr import ResNetSimCLR
-from simclr import SimCLR
+# from simclr import SimCLR
+from simclr_singleGPU import SimCLR
 from ddp import misc
 from torch.cuda.amp import GradScaler
 
@@ -50,7 +51,7 @@ parser.add_argument('--warmup_epochs', type=int, default=10, metavar='N',
                         help='epochs to warmup LR')
 parser.add_argument('--accum_iter', default=1, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
-parser.add_argument('--subset_size', default=1e6, type=int, help="size of the dataset")
+parser.add_argument('--subset_size', default=None, type=int, help="size of the dataset")
 
 parser.add_argument('--out_dim', default=128, type=int,
                     help='feature dimension (default: 128)')
@@ -93,7 +94,8 @@ def main():
     dataset = ContrastiveLearningDataset(args.data)
 
     train_dataset = dataset.get_dataset(args.dataset_name, args.n_views)
-    train_dataset = torch.utils.data.Subset(train_dataset, misc.select_indices(train_dataset, args.subset_size))
+    if args.subset_size is not None:
+        train_dataset = torch.utils.data.Subset(train_dataset, misc.select_indices(train_dataset, args.subset_size))
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
