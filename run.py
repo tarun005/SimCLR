@@ -2,10 +2,11 @@ import argparse
 import torch
 import torch.backends.cudnn as cudnn
 from torchvision import models
+from pathlib import Path
 from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset
 from models.resnet_simclr import ResNetSimCLR
-# from simclr import SimCLR
-from simclr_singleGPU import SimCLR
+from simclr import SimCLR
+# from simclr_singleGPU import SimCLR
 from ddp import misc
 from torch.cuda.amp import GradScaler
 
@@ -141,6 +142,7 @@ def main():
                                                            last_epoch=-1)
 
     scaler = GradScaler(enabled=args.fp16_precision)
+
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=scaler)                                                           
 
