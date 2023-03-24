@@ -75,7 +75,7 @@ class SimCLR(object):
         logging.info(f"Start SimCLR training for {self.args.epochs} epochs.")
         logging.info(f"Training with gpu: {self.args.disable_cuda}.")
 
-        for epoch_counter in range(self.args.epochs):
+        for epoch_counter in range(self.args.start_epoch, self.args.epochs):
 
             metric_logger = MetricLogger(delimiter="  ")
             metric_logger.add_meter('lr', SmoothedValue(window_size=1, fmt='{value:.6f}'))

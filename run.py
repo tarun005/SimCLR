@@ -63,6 +63,7 @@ parser.add_argument('--temperature', default=0.07, type=float,
 parser.add_argument('--n-views', default=2, type=int, metavar='N',
                     help='Number of views for contrastive learning training.')
 parser.add_argument('--gpu-index', default=0, type=int, help='Gpu index.')
+parser.add_argument('--start_epoch', default=0, type=int, help='start epoch.')
 
 ## Distributed Data Parallel
 parser.add_argument('--world_size', default=1, type=int,
