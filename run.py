@@ -5,8 +5,8 @@ from torchvision import models
 from pathlib import Path
 from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset
 from models.resnet_simclr import ResNetSimCLR
-from simclr import SimCLR
-# from simclr_singleGPU import SimCLR
+# from simclr import SimCLR
+from simclr_singleGPU import SimCLR
 from ddp import misc
 from torch.cuda.amp import GradScaler
 
