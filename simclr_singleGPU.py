@@ -10,7 +10,7 @@ from torch.cuda.amp import GradScaler, autocast
 # from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from utils import save_config_file, accuracy, save_checkpoint
-from ddp.misc import SmoothedValue, all_reduce_mean, save_model, MetricLogger
+from ddp.misc import SmoothedValue, all_reduce_mean, save_model, MetricLogger, save_on_master
 
 torch.manual_seed(0)
 
@@ -72,7 +72,7 @@ class SimCLR(object):
         logging.info(f"Start SimCLR training for {self.args.epochs} epochs.")
         logging.info(f"Training with gpu: {self.args.disable_cuda}.")
 
-        for epoch_counter in range(self.args.epochs):
+        for epoch_counter in range(self.args.start_epoch, self.args.epochs):
 
             metric_logger = MetricLogger(delimiter="  ")
             metric_logger.add_meter('lr', SmoothedValue(window_size=1, fmt='{value:.6f}'))
@@ -135,6 +135,15 @@ class SimCLR(object):
 
             # logging.debug(f"Epoch: {epoch_counter}\tLoss: {loss}\tTop1 accuracy: {top1[0]}")
             logging.debug(f"Epoch: {epoch_counter}\tLoss: {loss}")
+
+            to_save = {
+                'model': self.model.module.state_dict(),
+                'optimizer': self.optimizer.state_dict(),
+                'epoch': epoch_counter,
+                'scaler': scaler.state_dict(),
+                'args': self.args,
+            }
+            save_on_master(to_save, os.path.join(self.args.output_dir, "checkpoint.pth"))
 
             if (epoch_counter % 20 == 0 or epoch_counter + 1 == self.args.epochs):
                 save_model(args=self.args, epoch=epoch_counter, model=self.model, model_without_ddp=self.model.module,

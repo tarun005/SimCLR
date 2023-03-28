@@ -8,6 +8,7 @@ from models.resnet_simclr import ResNetSimCLR
 # from simclr import SimCLR
 from simclr_singleGPU import SimCLR
 from ddp import misc
+import os
 from torch.cuda.amp import GradScaler
 
 model_names = sorted(name for name in models.__dict__
@@ -86,8 +87,8 @@ def main():
     if not args.disable_cuda and torch.cuda.is_available():
         args.device = torch.device('cuda')
         device = args.device
-        cudnn.deterministic = True
-        cudnn.benchmark = True
+        # cudnn.deterministic = True
+        # cudnn.benchmark = True
     else:
         args.device = torch.device('cpu')
         device = args.device
@@ -143,6 +144,9 @@ def main():
                                                            last_epoch=-1)
 
     scaler = GradScaler(enabled=args.fp16_precision)
+
+    if os.path.exists(os.path.join(args.output_dir, "checkpoint.pth")) and args.resume is None:
+        args.resume = os.path.join(args.output_dir, "checkpoint.pth")
 
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=scaler)                                                           
